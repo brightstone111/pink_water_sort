@@ -13,7 +13,7 @@ import { getAnalytics } from "firebase/analytics";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyCxo5En6ka7VTSP4XuHelmd8voyZCNpJK4",
+  apiKey: "AIzaSyCXo5En6ka7VTSP4XuHelmd8voyZCNpJK4",
   authDomain: "pink-water-sort.firebaseapp.com",
   projectId: "pink-water-sort",
   storageBucket: "pink-water-sort.firebasestorage.app",
