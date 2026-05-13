@@ -5,11 +5,26 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 
 // Firebase 초기화 (컴포넌트 외부)
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// Import the functions you need from the SDKs you need
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCXo5En6ka7VTSP4XuHelmd8voyZCNpJK4",
+  authDomain: "pink-water-sort.firebaseapp.com",
+  projectId: "pink-water-sort",
+  storageBucket: "pink-water-sort.firebasestorage.app",
+  messagingSenderId: "366519785830",
+  appId: "1:366519785830:web:03a7c06cb1b20fb77790a7",
+  measurementId: "G-6KT1E16F3N"
+};
+
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const analytics = getAnalytics(app);
 
 // 더욱 다양하고 쨍한 색상들 추가
 const PAINT_COLORS = [
