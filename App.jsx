@@ -25,6 +25,10 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+// [추가해야 할 부분]
+const auth = getAuth(app); // auth 정의
+const db = getFirestore(app); // db 정의
+const appId = "pink-water-sort-v1"; // appId 정의
 
 // 더욱 다양하고 쨍한 색상들 추가
 const PAINT_COLORS = [
