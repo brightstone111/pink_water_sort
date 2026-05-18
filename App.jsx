@@ -40,6 +40,75 @@ const PAINT_COLORS = [
 const TUBE_CAPACITY = 4;
 const TARGET_COLOR = 'bg-[#ff1493]'; // 목표 색상 (핫핑크)
 
+// Web Audio API 기반 효과음 유틸리티
+const getAudioCtx = () => {
+  if (typeof window !== 'undefined' && !window.audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) window.audioCtx = new AudioContext();
+  }
+  return window.audioCtx;
+};
+
+const playSound = (type) => {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    const now = ctx.currentTime;
+    
+    if (type === 'pour') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+      
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.2, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+      
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } else if (type === 'cork') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+      
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+      
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } else if (type === 'win') {
+      const osc2 = ctx.createOscillator();
+      osc2.connect(gain);
+      
+      osc.type = 'triangle';
+      osc2.type = 'triangle';
+      
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.setValueAtTime(783.99, now + 0.15); // G5
+      osc2.frequency.setValueAtTime(659.25, now); // E5
+      osc2.frequency.setValueAtTime(1046.50, now + 0.15); // C6
+      
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.3, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+      
+      osc.start(now);
+      osc2.start(now);
+      osc.stop(now + 1.0);
+      osc2.stop(now + 1.0);
+    }
+  } catch (e) {
+    console.error('Audio error', e);
+  }
+};
+
 const App = () => {
   const [tubes, setTubes] = useState([]);
   const [selectedTube, setSelectedTube] = useState(null);
@@ -54,7 +123,7 @@ const App = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isActive, setIsActive] = useState(false);
-  
+
   // 애니메이션 상태
   const [animatingPour, setAnimatingPour] = useState(null);
 
@@ -154,15 +223,15 @@ const App = () => {
   const generateLevel = (currentLevel) => {
     const numColors = Math.min(4 + Math.floor((currentLevel - 1) / 2), PAINT_COLORS.length);
     const activeColors = PAINT_COLORS.slice(0, numColors);
-    
+
     const giantCapacity = 12 + Math.floor((currentLevel - 1) / 3) * 4;
-    
+
     let allChunks = [];
-    
+
     for (let i = 0; i < giantCapacity; i++) {
       allChunks.push(TARGET_COLOR);
     }
-    
+
     for (let i = 0; i < activeColors.length; i++) {
       for (let j = 0; j < TUBE_CAPACITY; j++) {
         allChunks.push(activeColors[i]);
@@ -175,7 +244,7 @@ const App = () => {
     }
 
     const newTubes = [];
-    
+
     newTubes.push({
       id: 0,
       isGiant: true,
@@ -186,9 +255,9 @@ const App = () => {
     const totalColorChunks = allChunks.length;
     const emptySpaces = 8;
     const numNormalTubes = Math.ceil((totalColorChunks + emptySpaces) / TUBE_CAPACITY);
-    
+
     const normalContents = Array.from({ length: numNormalTubes }, () => []);
-    
+
     for (let i = 0; i < numNormalTubes; i++) {
       if (allChunks.length > 0) {
         normalContents[i].push(allChunks.pop());
@@ -198,15 +267,15 @@ const App = () => {
     while (allChunks.length > 0) {
       const chunk = allChunks.pop();
       const availableIndices = [];
-      
+
       for (let i = 0; i < numNormalTubes; i++) {
         if (normalContents[i].length < TUBE_CAPACITY) {
           availableIndices.push(i);
         }
       }
-      
+
       if (availableIndices.length === 0) break;
-      
+
       const randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
       normalContents[randomIdx].push(chunk);
     }
@@ -219,7 +288,7 @@ const App = () => {
         contents: normalContents[i]
       });
     }
-    
+
     return newTubes;
   };
 
@@ -233,7 +302,7 @@ const App = () => {
     setIsWon(false);
     setShowWinPopup(false);
     setIsGameOver(false);
-    
+
     // 레벨에 따른 제한시간 설정 (기본 60초 + 레벨당 2초 증가)
     const initialTime = 60 + (targetLevel - 1) * 2;
     setTimeLeft(initialTime);
@@ -246,10 +315,10 @@ const App = () => {
 
     // 코르크 마개로 닫힌 완성된 병은 클릭 방지
     const currentTube = tubes[index];
-    let isClickedCompleted = currentTube.contents.length === currentTube.capacity && 
-                               currentTube.contents.every(c => c === currentTube.contents[0]) && 
-                               currentTube.contents.length > 0;
-    
+    let isClickedCompleted = currentTube.contents.length === currentTube.capacity &&
+      currentTube.contents.every(c => c === currentTube.contents[0]) &&
+      currentTube.contents.length > 0;
+
     // 예외: 목표 색상(핫핑크)으로 꽉 찬 '작은 병'은 마개로 닫히지 않음 (거대 병으로 옮겨야 하므로)
     if (!currentTube.isGiant && currentTube.contents[0] === TARGET_COLOR) {
       isClickedCompleted = false;
@@ -315,6 +384,7 @@ const App = () => {
       const direction = sourceX < destX ? 'right' : 'left';
 
       setAnimatingPour({ index: selectedTube, direction });
+      playSound('pour');
 
       setTimeout(() => {
         setHistory([...history, tubes.map(t => ({ ...t, contents: [...t.contents] }))]);
@@ -345,8 +415,10 @@ const App = () => {
       if (isAllOneColor) {
         setIsWon(true);
         setIsActive(false); // 타이머 중지
+        playSound('cork');
         // 물감이 차오르고 코르크가 닫히는 애니메이션을 볼 수 있도록 1.5초 대기
         setTimeout(() => {
+          playSound('win');
           setShowWinPopup(true);
         }, 1500);
       }
@@ -401,17 +473,17 @@ const App = () => {
     const isAnimating = animatingPour?.index === originalIndex;
     const animDirection = animatingPour?.direction;
     const isGiant = tube.isGiant;
-    
+
     // 완성 여부 확인 (꽉 차있고 모든 색상이 같음)
-    let isCompleted = tube.contents.length === tube.capacity && 
-                        tube.contents.every(c => c === tube.contents[0]) && 
-                        tube.contents.length > 0;
-    
+    let isCompleted = tube.contents.length === tube.capacity &&
+      tube.contents.every(c => c === tube.contents[0]) &&
+      tube.contents.length > 0;
+
     // 예외: 목표 색상(핫핑크)으로 꽉 찬 '작은 병'은 마개가 생기지 않음
     if (!tube.isGiant && tube.contents[0] === TARGET_COLOR) {
       isCompleted = false;
     }
-    
+
     let transformClass = "hover:-translate-y-2 hover:brightness-110";
     if (isAnimating) {
       if (animDirection === 'right') {
@@ -432,7 +504,7 @@ const App = () => {
     const neckWidth = isGiant ? 'w-6 sm:w-8' : 'w-4 sm:w-6';
 
     return (
-      <div 
+      <div
         key={tube.id}
         onClick={() => handleTubeClick(originalIndex)}
         className={`relative flex flex-col items-center cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] origin-bottom ${transformClass}`}
@@ -449,28 +521,33 @@ const App = () => {
 
         <div className={`${isGiant ? 'w-8 sm:w-10 h-3' : 'w-5 sm:w-7 h-2'} border-[2px] border-white/60 rounded-[50%] -mb-[0.4rem] sm:-mb-[0.5rem] z-30 bg-white/5`}></div>
         <div className={`${neckWidth} h-4 border-x-[2px] border-white/50 bg-white/5 z-20 backdrop-blur-sm`}></div>
-        
+
         <div className={`
-          ${bodyWidth} ${bodyHeight} border-[3px] border-white/40 rounded-b-[1.25rem] sm:rounded-b-[1.5rem] rounded-t-lg bg-white/5 relative shadow-[inset_0_0_25px_rgba(0,0,0,0.5)] backdrop-blur-md overflow-hidden
+          ${bodyWidth} ${bodyHeight} border-[3px] border-white/40 rounded-b-[1.25rem] sm:rounded-b-[1.5rem] rounded-t-lg bg-white/5 relative shadow-[inset_0_0_25px_rgba(0,0,0,0.5),inset_0_0_15px_rgba(255,255,255,0.2)] backdrop-blur-md overflow-hidden
         `}>
-          <div className="absolute top-2 bottom-2 left-[10%] w-[25%] bg-gradient-to-r from-white/40 to-transparent rounded-full z-20 pointer-events-none"></div>
+          {/* 빛 반사 하이라이트 (왼쪽 둥근 볼륨) */}
+          <div className="absolute top-2 bottom-2 left-[10%] w-[25%] bg-gradient-to-r from-white/50 to-transparent rounded-full z-20 pointer-events-none opacity-80"></div>
+          {/* 빛 반사 엣지 라인 (오른쪽 얇은 라인) */}
+          <div className="absolute top-2 bottom-2 right-[5%] w-[8%] bg-gradient-to-l from-white/30 to-transparent rounded-full z-20 pointer-events-none opacity-70"></div>
+          {/* 윗면 엣지 하이라이트 */}
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-b from-white/50 to-transparent z-20 pointer-events-none"></div>
 
           {/* 찰랑이는 액체를 감싸는 래퍼 */}
           <div className="absolute inset-0 z-0 origin-bottom">
-            
+
             {/* 액체 본체 (상단 표면만 찰랑임) */}
             <div className="w-full h-full flex flex-col-reverse origin-bottom">
               {tube.contents.map((colorClass, colorIndex) => {
                 const isTop = colorIndex === tube.contents.length - 1;
                 const isBottom = colorIndex === 0;
                 return (
-                  <div 
+                  <div
                     key={`${tube.id}-${colorIndex}`}
                     className={`w-full ${colorClass} transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative ${isBottom ? 'rounded-b-[1rem] sm:rounded-b-[1.25rem]' : ''}`}
                     style={{ height: `${100 / tube.capacity}%` }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none mix-blend-overlay"></div>
-                    
+
                     {/* 수면 파도 효과 (맨 윗층) */}
                     {isTop && (
                       <div className={`absolute -top-1.5 sm:-top-2 left-0 right-0 h-3 sm:h-4 ${colorClass} animate-surface shadow-[inset_0_3px_5px_rgba(255,255,255,0.7)] z-10 transition-colors duration-500 pointer-events-none`}></div>
@@ -487,7 +564,7 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#1a0b2e] via-[#2a1352] to-[#4c167d] text-slate-100 flex flex-col font-sans selection:bg-transparent touch-manipulation overflow-hidden relative">
-      
+
       {/* 찰랑이는 액체 및 코르크 마개 애니메이션용 CSS */}
       <style>{`
         @keyframes surface-wave {
@@ -516,8 +593,8 @@ const App = () => {
       <div className="flex justify-between items-start w-full px-4 sm:px-8 pt-6 pb-2 z-20">
         <div className="flex flex-col items-center">
           <div className="relative bg-purple-900/60 p-2 rounded-xl border border-purple-500/30 flex items-center gap-1 shadow-lg backdrop-blur-sm">
-             <div className="text-yellow-400 font-black text-xl">⭐</div>
-             <span className="font-bold text-sm bg-purple-800 px-2 py-0.5 rounded text-white">{stars}</span>
+            <div className="text-yellow-400 font-black text-xl">⭐</div>
+            <span className="font-bold text-sm bg-purple-800 px-2 py-0.5 rounded text-white">{stars}</span>
           </div>
         </div>
 
@@ -525,22 +602,22 @@ const App = () => {
           <h1 className="text-xl sm:text-2xl font-black text-white drop-shadow-md mb-1">
             Level {level}
           </h1>
-          
+
           {/* 타이머 UI */}
           <div className={`flex items-center gap-2 px-3 py-1 mt-1 rounded-full border-2 ${timeLeft <= 10 && !isWon ? 'bg-red-500/20 border-red-500 text-red-300 animate-pulse' : 'bg-black/20 border-white/20 text-white'}`}>
             <Clock size={16} className={timeLeft <= 10 && !isWon ? 'animate-bounce' : ''} />
             <span className="font-mono font-bold text-base tracking-wider">{formatTime(timeLeft)}</span>
           </div>
-          
+
           <div className="flex gap-4 mt-4">
-            <button 
+            <button
               onClick={handleUndo} disabled={history.length === 0 || isWon || isGameOver || animatingPour !== null}
               className={`p-2 rounded-full ${history.length === 0 || isWon || isGameOver || animatingPour !== null ? 'text-white/30' : 'text-white hover:bg-white/10 active:scale-90'} transition-all`}
             >
               <Undo2 size={24} />
             </button>
-            <button 
-              onClick={() => initGame(level)} 
+            <button
+              onClick={() => initGame(level)}
               className="p-2 rounded-full text-white hover:bg-white/10 active:scale-90 transition-all"
             >
               <RotateCcw size={24} />
@@ -549,7 +626,7 @@ const App = () => {
         </div>
 
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={() => setShowLeaderboard(true)}
             className="w-12 h-12 bg-purple-600/80 hover:bg-purple-500 rounded-2xl flex justify-center items-center text-yellow-300 shadow-lg border-2 border-purple-400 transition-colors"
             title="랭킹 보기"
@@ -569,8 +646,10 @@ const App = () => {
           </div>
         </div>
 
-        <div className="flex-shrink-0 relative z-0 mx-2">
-           {renderTube(giantTube, 'giant', tubes.findIndex(t => t.id === giantTube.id))}
+        <div className="flex-shrink-0 relative z-0 mx-2 flex justify-center items-center">
+          {/* 거대 물병 전용 후광 효과 (시선 유도) */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-pink-500/50 via-pink-600/10 to-transparent blur-2xl -z-10 scale-150 animate-pulse pointer-events-none"></div>
+          {renderTube(giantTube, 'giant', tubes.findIndex(t => t.id === giantTube.id))}
         </div>
 
         <div className="flex-1 flex justify-start pl-2 sm:pl-6">
@@ -604,12 +683,12 @@ const App = () => {
                 <X size={28} />
               </button>
             </div>
-            
+
             <div className="p-6 bg-purple-900/20 border-b border-purple-500/30">
               <label className="block text-sm font-bold text-purple-200 mb-2">내 닉네임 설정</label>
               <div className="flex gap-2">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="닉네임을 입력하세요"
@@ -647,14 +726,14 @@ const App = () => {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-300">
           <div className="bg-[#2a1352] p-8 rounded-3xl shadow-2xl flex flex-col items-center transform scale-100 animate-in zoom-in-95 duration-300 border-2 border-purple-500/50 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent pointer-events-none"></div>
-            
+
             <div className="text-7xl mb-6 animate-bounce">🎉</div>
             <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-purple-200 mb-2 drop-shadow-sm">
               레벨 {level} 클리어!
             </h2>
             <p className="text-purple-200/80 mb-8 font-medium">거대 물병을 찰랑이는 핫핑크 물결로 완벽하게 채웠습니다!</p>
-            
-            <button 
+
+            <button
               onClick={nextLevel}
               className="px-10 py-4 bg-gradient-to-b from-green-400 to-green-600 hover:from-green-300 hover:to-green-500 text-white rounded-full font-black text-xl flex items-center gap-2 transition-transform active:scale-95 shadow-[0_10px_20px_rgba(22,163,74,0.4)] border border-green-300/50"
             >
@@ -669,14 +748,14 @@ const App = () => {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-300">
           <div className="bg-[#2a1352] p-8 rounded-3xl shadow-2xl flex flex-col items-center transform scale-100 animate-in zoom-in-95 duration-300 border-2 border-red-500/50 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent pointer-events-none"></div>
-            
+
             <div className="text-7xl mb-6 animate-pulse">⏰</div>
             <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-red-300 mb-2 drop-shadow-sm">
               시간 초과!
             </h2>
             <p className="text-red-200/80 mb-8 font-medium">아쉽네요, 제한시간이 모두 지났습니다.</p>
-            
-            <button 
+
+            <button
               onClick={() => initGame(level)}
               className="px-10 py-4 bg-gradient-to-b from-red-400 to-red-600 hover:from-red-300 hover:to-red-500 text-white rounded-full font-black text-xl flex items-center gap-2 transition-transform active:scale-95 shadow-[0_10px_20px_rgba(239,68,68,0.4)] border border-red-300/50"
             >
