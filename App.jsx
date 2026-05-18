@@ -53,52 +53,52 @@ const playSound = (type) => {
   const ctx = getAudioCtx();
   if (!ctx) return;
   if (ctx.state === 'suspended') ctx.resume();
-  
+
   try {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    
+
     const now = ctx.currentTime;
-    
+
     if (type === 'pour') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(400, now);
       osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
-      
+
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(0.2, now + 0.05);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-      
+
       osc.start(now);
       osc.stop(now + 0.2);
     } else if (type === 'cork') {
       osc.type = 'square';
       osc.frequency.setValueAtTime(150, now);
       osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
-      
+
       gain.gain.setValueAtTime(0.3, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-      
+
       osc.start(now);
       osc.stop(now + 0.1);
     } else if (type === 'win') {
       const osc2 = ctx.createOscillator();
       osc2.connect(gain);
-      
+
       osc.type = 'triangle';
       osc2.type = 'triangle';
-      
+
       osc.frequency.setValueAtTime(523.25, now); // C5
       osc.frequency.setValueAtTime(783.99, now + 0.15); // G5
       osc2.frequency.setValueAtTime(659.25, now); // E5
       osc2.frequency.setValueAtTime(1046.50, now + 0.15); // C6
-      
+
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(0.3, now + 0.1);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
-      
+
       osc.start(now);
       osc2.start(now);
       osc.stop(now + 1.0);
