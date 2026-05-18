@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Undo2, Play, Trophy, X } from 'lucide-react';
+import { RotateCcw, Undo2, Play, Trophy, X, Clock } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
@@ -33,7 +33,7 @@ const appId = "pink-water-sort-v1"; // appId 정의
 // 더욱 다양하고 쨍한 색상들 추가
 const PAINT_COLORS = [
   'bg-red-500', 'bg-[#1d4ed8]', 'bg-[#16a34a]', 'bg-[#eab308]', // 빨, 파, 초, 노
-  'bg-purple-600', 'bg-[#ec4899]', 'bg-[#14b8a6]', 'bg-[#f97316]', // 보라, 핑크, 틸, 오렌지
+  'bg-purple-600', 'bg-[#8B4513]', 'bg-[#14b8a6]', 'bg-[#f97316]', // 보라, 브라운, 틸, 오렌지
   'bg-[#6366f1]', 'bg-[#8b5cf6]', 'bg-[#0ea5e9]', 'bg-[#84cc16]'  // 인디고, 바이올렛, 스카이블루, 라임
 ];
 
@@ -50,12 +50,40 @@ const App = () => {
   const [showWinPopup, setShowWinPopup] = useState(false);
   const [stars, setStars] = useState(999);
 
+  // 제한시간 관련 상태
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [isActive, setIsActive] = useState(false);
+  
+  // 애니메이션 상태
+  const [animatingPour, setAnimatingPour] = useState(null);
+
   // Firebase 관련 상태
   const [user, setUser] = useState(null);
   const [nickname, setNickname] = useState('');
   const [leaderboard, setLeaderboard] = useState([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // 타이머 효과
+  useEffect(() => {
+    let interval = null;
+    if (isActive && timeLeft > 0 && !isWon && !isGameOver && !showLeaderboard) {
+      interval = setInterval(() => {
+        setTimeLeft(time => time - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && isActive && !isWon) {
+      setIsGameOver(true);
+      setIsActive(false);
+    }
+    return () => clearInterval(interval);
+  }, [isActive, timeLeft, isWon, isGameOver, showLeaderboard]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
 
   // Firebase Auth 초기화
   useEffect(() => {
@@ -193,15 +221,22 @@ const App = () => {
     const newTubes = generateLevel(targetLevel);
     setTubes(newTubes);
     setSelectedTube(null);
+    setAnimatingPour(null);
     setMoves(0);
     setHistory([]);
     setIsWon(false);
     setShowWinPopup(false);
+    setIsGameOver(false);
+    
+    // 레벨에 따른 제한시간 설정 (기본 60초 + 레벨당 15초 증가)
+    const initialTime = 60 + (targetLevel - 1) * 15;
+    setTimeLeft(initialTime);
+    setIsActive(true);
   };
 
   // 물감 따르기 로직
   const handleTubeClick = (index) => {
-    if (isWon) return;
+    if (isWon || isGameOver || animatingPour) return;
 
     // 코르크 마개로 닫힌 완성된 병은 클릭 방지
     const currentTube = tubes[index];
@@ -263,22 +298,38 @@ const App = () => {
     }
 
     if (moveCount > 0) {
-      setHistory([...history, tubes.map(t => ({ ...t, contents: [...t.contents] }))]);
+      const getLogicalX = (idx) => {
+        if (idx === 0) return 0;
+        const half = Math.ceil((tubes.length - 1) / 2);
+        return idx <= half ? -100 + idx : 100 + idx;
+      };
 
-      for (let i = 0; i < moveCount; i++) {
-        destContents.push(sourceContents.pop());
-      }
+      const sourceX = getLogicalX(selectedTube);
+      const destX = getLogicalX(index);
+      const direction = sourceX < destX ? 'right' : 'left';
 
-      const newTubes = [...tubes];
-      newTubes[selectedTube] = { ...sourceNode, contents: sourceContents };
-      newTubes[index] = { ...destNode, contents: destContents };
+      setAnimatingPour({ index: selectedTube, direction });
 
-      setTubes(newTubes);
-      setMoves(m => m + 1);
-      checkWinCondition(newTubes);
+      setTimeout(() => {
+        setHistory([...history, tubes.map(t => ({ ...t, contents: [...t.contents] }))]);
+
+        for (let i = 0; i < moveCount; i++) {
+          destContents.push(sourceContents.pop());
+        }
+
+        const newTubes = [...tubes];
+        newTubes[selectedTube] = { ...sourceNode, contents: sourceContents };
+        newTubes[index] = { ...destNode, contents: destContents };
+
+        setTubes(newTubes);
+        setMoves(m => m + 1);
+        checkWinCondition(newTubes);
+        setSelectedTube(null);
+        setAnimatingPour(null);
+      }, 350); // 기울어지는 애니메이션 시간 대기
+    } else {
+      setSelectedTube(null);
     }
-    
-    setSelectedTube(null);
   };
 
   const checkWinCondition = (currentTubes) => {
@@ -287,6 +338,7 @@ const App = () => {
       const isAllOneColor = giantTube.contents.every(c => c === giantTube.contents[0]);
       if (isAllOneColor) {
         setIsWon(true);
+        setIsActive(false); // 타이머 중지
         // 물감이 차오르고 코르크가 닫히는 애니메이션을 볼 수 있도록 1.5초 대기
         setTimeout(() => {
           setShowWinPopup(true);
@@ -296,7 +348,8 @@ const App = () => {
   };
 
   const handleUndo = () => {
-    if (history.length > 0 && !isWon) {
+    if (animatingPour) return;
+    if (history.length > 0 && !isWon && !isGameOver) {
       const previousState = history[history.length - 1];
       setTubes(previousState);
       setHistory(history.slice(0, -1));
@@ -336,6 +389,8 @@ const App = () => {
   const renderTube = (tube, side, originalIndex) => {
     if (!tube) return null;
     const isSelected = selectedTube === originalIndex;
+    const isAnimating = animatingPour?.index === originalIndex;
+    const animDirection = animatingPour?.direction;
     const isGiant = tube.isGiant;
     
     // 완성 여부 확인 (꽉 차있고 모든 색상이 같음)
@@ -349,7 +404,13 @@ const App = () => {
     }
     
     let transformClass = "hover:-translate-y-2 hover:brightness-110";
-    if (isSelected) {
+    if (isAnimating) {
+      if (animDirection === 'right') {
+        transformClass = "-translate-y-12 rotate-[30deg] z-50 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] scale-105";
+      } else {
+        transformClass = "-translate-y-12 -rotate-[30deg] z-50 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] scale-105";
+      }
+    } else if (isSelected) {
       if (side === 'left') transformClass = "-translate-y-8 z-50 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] scale-105";
       else if (side === 'right') transformClass = "-translate-y-8 z-50 drop-shadow-[0_0_20px_rgba(255,255,255,0.6)] scale-105";
       else transformClass = "-translate-y-4 z-50 drop-shadow-[0_0_35px_rgba(255,20,147,0.8)] scale-105";
@@ -456,10 +517,16 @@ const App = () => {
             Level {level}
           </h1>
           
+          {/* 타이머 UI */}
+          <div className={`flex items-center gap-2 px-3 py-1 mt-1 rounded-full border-2 ${timeLeft <= 10 && !isWon ? 'bg-red-500/20 border-red-500 text-red-300 animate-pulse' : 'bg-black/20 border-white/20 text-white'}`}>
+            <Clock size={16} className={timeLeft <= 10 && !isWon ? 'animate-bounce' : ''} />
+            <span className="font-mono font-bold text-base tracking-wider">{formatTime(timeLeft)}</span>
+          </div>
+          
           <div className="flex gap-4 mt-4">
             <button 
-              onClick={handleUndo} disabled={history.length === 0 || isWon}
-              className={`p-2 rounded-full ${history.length === 0 || isWon ? 'text-white/30' : 'text-white hover:bg-white/10 active:scale-90'} transition-all`}
+              onClick={handleUndo} disabled={history.length === 0 || isWon || isGameOver || animatingPour !== null}
+              className={`p-2 rounded-full ${history.length === 0 || isWon || isGameOver || animatingPour !== null ? 'text-white/30' : 'text-white hover:bg-white/10 active:scale-90'} transition-all`}
             >
               <Undo2 size={24} />
             </button>
@@ -582,6 +649,28 @@ const App = () => {
             >
               <Play fill="currentColor" size={24} />
               다음 레벨
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isGameOver && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-300">
+          <div className="bg-[#2a1352] p-8 rounded-3xl shadow-2xl flex flex-col items-center transform scale-100 animate-in zoom-in-95 duration-300 border-2 border-red-500/50 text-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent pointer-events-none"></div>
+            
+            <div className="text-7xl mb-6 animate-pulse">⏰</div>
+            <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-red-300 mb-2 drop-shadow-sm">
+              시간 초과!
+            </h2>
+            <p className="text-red-200/80 mb-8 font-medium">아쉽네요, 제한시간이 모두 지났습니다.</p>
+            
+            <button 
+              onClick={() => initGame(level)}
+              className="px-10 py-4 bg-gradient-to-b from-red-400 to-red-600 hover:from-red-300 hover:to-red-500 text-white rounded-full font-black text-xl flex items-center gap-2 transition-transform active:scale-95 shadow-[0_10px_20px_rgba(239,68,68,0.4)] border border-red-300/50"
+            >
+              <RotateCcw size={24} />
+              다시 시도하기
             </button>
           </div>
         </div>
