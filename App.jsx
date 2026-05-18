@@ -61,6 +61,7 @@ const App = () => {
   // Firebase 관련 상태
   const [user, setUser] = useState(null);
   const [nickname, setNickname] = useState('');
+  const [hasNickname, setHasNickname] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -111,7 +112,12 @@ const App = () => {
     getDoc(progressRef).then(docSnap => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.nickname) setNickname(data.nickname);
+        if (data.nickname && data.nickname !== '익명 유저') {
+          setNickname(data.nickname);
+          setHasNickname(true);
+        } else if (data.nickname) {
+          setNickname(data.nickname);
+        }
         if (data.stars !== undefined) setStars(data.stars);
         if (data.level && data.level > 1) {
           setLevel(data.level);
@@ -228,8 +234,8 @@ const App = () => {
     setShowWinPopup(false);
     setIsGameOver(false);
     
-    // 레벨에 따른 제한시간 설정 (기본 60초 + 레벨당 15초 증가)
-    const initialTime = 60 + (targetLevel - 1) * 15;
+    // 레벨에 따른 제한시간 설정 (기본 60초 + 레벨당 2초 증가)
+    const initialTime = 60 + (targetLevel - 1) * 2;
     setTimeLeft(initialTime);
     setIsActive(true);
   };
@@ -367,6 +373,9 @@ const App = () => {
 
     if (user) {
       const currentNickname = nickname.trim() || '익명 유저';
+      if (currentNickname !== '익명 유저') {
+        setHasNickname(true);
+      }
       try {
         const progressRef = doc(db, 'artifacts', appId, 'users', user.uid, 'gameData', 'progress');
         await setDoc(progressRef, { level: next, nickname: currentNickname, stars: nextStars }, { merge: true });
@@ -605,10 +614,12 @@ const App = () => {
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="닉네임을 입력하세요"
                   maxLength={10}
-                  className="flex-1 bg-black/30 border border-purple-500/50 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-yellow-400"
+                  disabled={hasNickname}
+                  className={`flex-1 bg-black/30 border border-purple-500/50 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-yellow-400 ${hasNickname ? 'opacity-60 cursor-not-allowed' : ''}`}
                 />
               </div>
-              <p className="text-xs text-purple-300/70 mt-2">* 레벨을 클리어할 때 내 닉네임과 레벨이 랭킹에 갱신됩니다.</p>
+              <p className="text-xs text-red-400 font-bold mt-2">* 닉네임은 최초 1회만 설정 가능하며 한 번 정하면 변경할 수 없습니다.</p>
+              <p className="text-xs text-purple-300/70 mt-1">* 레벨을 클리어할 때 내 닉네임과 레벨이 랭킹에 갱신됩니다.</p>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
