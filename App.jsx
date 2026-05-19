@@ -404,10 +404,6 @@ const App = () => {
               newTubes[selectedTube] = src;
               newTubes[index] = dst;
 
-              // 마지막 물감이 이동 완료된 시점에 승리 조건 검사
-              if (i === moveCount - 1) {
-                setTimeout(() => checkWinCondition(newTubes), 10);
-              }
               return newTubes;
             });
             i++;
@@ -425,8 +421,10 @@ const App = () => {
     }
   };
 
-  const checkWinCondition = (currentTubes) => {
-    const giantTube = currentTubes.find(t => t.isGiant);
+  // 승리 조건 검사 (useEffect를 사용하여 최신 상태 기반으로 안정적 판정)
+  useEffect(() => {
+    if (isWon || tubes.length === 0) return;
+    const giantTube = tubes.find(t => t.isGiant);
     if (giantTube && giantTube.contents.length === giantTube.capacity) {
       const isAllOneColor = giantTube.contents.every(c => c === giantTube.contents[0]);
       if (isAllOneColor) {
@@ -440,7 +438,7 @@ const App = () => {
         }, 1500);
       }
     }
-  };
+  }, [tubes, isWon]);
 
   const handleUndo = () => {
     if (animatingPour) return;
