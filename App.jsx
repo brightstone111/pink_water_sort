@@ -373,6 +373,10 @@ const App = () => {
     }
 
     if (moveCount > 0) {
+      if (destNode.isGiant && destContents.length + moveCount === destNode.capacity) {
+        setIsActive(false); // 승리 확정 시 타이머 즉시 정지
+      }
+
       const getLogicalX = (idx) => {
         if (idx === 0) return 0;
         const half = Math.ceil((tubes.length - 1) / 2);
@@ -767,7 +771,7 @@ const App = () => {
         </div>
       )}
 
-      {isGameOver && (
+      {isGameOver && !isWon && !showWinPopup && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 animate-in fade-in duration-300">
           <div className="bg-[#2a1352] p-8 rounded-3xl shadow-2xl flex flex-col items-center transform scale-100 animate-in zoom-in-95 duration-300 border-2 border-red-500/50 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-transparent pointer-events-none"></div>
