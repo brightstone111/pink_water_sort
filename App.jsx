@@ -389,19 +389,32 @@ const App = () => {
       setTimeout(() => {
         setHistory([...history, tubes.map(t => ({ ...t, contents: [...t.contents] }))]);
 
-        for (let i = 0; i < moveCount; i++) {
-          destContents.push(sourceContents.pop());
-        }
+        let i = 0;
+        const pourInterval = setInterval(() => {
+          if (i < moveCount) {
+            setTubes(prev => {
+              const newTubes = [...prev];
+              const src = { ...newTubes[selectedTube], contents: [...newTubes[selectedTube].contents] };
+              const dst = { ...newTubes[index], contents: [...newTubes[index].contents] };
+              dst.contents.push(src.contents.pop());
+              newTubes[selectedTube] = src;
+              newTubes[index] = dst;
 
-        const newTubes = [...tubes];
-        newTubes[selectedTube] = { ...sourceNode, contents: sourceContents };
-        newTubes[index] = { ...destNode, contents: destContents };
+              // 마지막 물감이 이동 완료된 시점에 승리 조건 검사
+              if (i === moveCount - 1) {
+                setTimeout(() => checkWinCondition(newTubes), 10);
+              }
+              return newTubes;
+            });
+            i++;
+          } else {
+            clearInterval(pourInterval);
+            setMoves(m => m + 1);
+            setSelectedTube(null);
+            setAnimatingPour(null);
+          }
+        }, 150);
 
-        setTubes(newTubes);
-        setMoves(m => m + 1);
-        checkWinCondition(newTubes);
-        setSelectedTube(null);
-        setAnimatingPour(null);
       }, 350); // 기울어지는 애니메이션 시간 대기
     } else {
       setSelectedTube(null);
@@ -503,6 +516,16 @@ const App = () => {
     const bodyHeight = isGiant ? 'h-[50vh] sm:h-[60vh]' : 'h-24 sm:h-36';
     const neckWidth = isGiant ? 'w-6 sm:w-8' : 'w-4 sm:w-6';
 
+    // 액체가 블록처럼 보이지 않고 하나로 합쳐지게 그룹핑
+    const groupedContents = [];
+    tube.contents.forEach((color) => {
+      if (groupedContents.length > 0 && groupedContents[groupedContents.length - 1].color === color) {
+        groupedContents[groupedContents.length - 1].count += 1;
+      } else {
+        groupedContents.push({ id: `${color}-${groupedContents.length}`, color, count: 1 });
+      }
+    });
+
     return (
       <div
         key={tube.id}
@@ -537,20 +560,20 @@ const App = () => {
 
             {/* 액체 본체 (상단 표면만 찰랑임) */}
             <div className="w-full h-full flex flex-col-reverse origin-bottom">
-              {tube.contents.map((colorClass, colorIndex) => {
-                const isTop = colorIndex === tube.contents.length - 1;
-                const isBottom = colorIndex === 0;
+              {groupedContents.map((group, groupIndex) => {
+                const isTop = groupIndex === groupedContents.length - 1;
+                const isBottom = groupIndex === 0;
                 return (
                   <div
-                    key={`${tube.id}-${colorIndex}`}
-                    className={`w-full ${colorClass} transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative ${isBottom ? 'rounded-b-[1rem] sm:rounded-b-[1.25rem]' : ''}`}
-                    style={{ height: `${100 / tube.capacity}%` }}
+                    key={group.id}
+                    className={`w-full ${group.color} transition-all duration-[400ms] ease-in-out relative ${isBottom ? 'rounded-b-[1rem] sm:rounded-b-[1.25rem]' : ''}`}
+                    style={{ height: `${(group.count / tube.capacity) * 100}%` }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none mix-blend-overlay"></div>
 
                     {/* 수면 파도 효과 (맨 윗층) */}
                     {isTop && (
-                      <div className={`absolute -top-1.5 sm:-top-2 left-0 right-0 h-3 sm:h-4 ${colorClass} animate-surface shadow-[inset_0_3px_5px_rgba(255,255,255,0.7)] z-10 transition-colors duration-500 pointer-events-none`}></div>
+                      <div className={`absolute -top-1.5 sm:-top-2 left-0 right-0 h-3 sm:h-4 ${group.color} animate-surface shadow-[inset_0_3px_5px_rgba(255,255,255,0.7)] z-10 transition-colors duration-500 pointer-events-none`}></div>
                     )}
                   </div>
                 );
